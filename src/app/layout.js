@@ -1,68 +1,57 @@
 'use client';
 
-import './globals.css';
 import { supabase } from '@/lib/supabase';
-import { useEffect, useState, createContext } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-// Context to share user & profile everywhere
-export const AuthContext = createContext({});
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const router = useRouter();
 
-export default function RootLayout({ children }) {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Get current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+  const signIn = async () => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-
-    // Listen to auth changes (login, logout, etc.)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => listener?.subscription?.unsubscribe();
-  }, []);
-
-  // Fetch profile when user is logged in
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (!error && data) setProfile(data);
-        });
-    } else {
-      setProfile(null);
-    }
-  }, [user]);
-
-  if (loading) {
-    return (
-      <html lang="en">
-        <body>
-          <div className="flex h-screen items-center justify-center text-2xl">
-            Loading...
-          </div>
-        </body>
-      </html>
-    );
-  }
+    if (error) alert(error.message);
+    else router.push('/');
+  };
 
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-gray-50">
-        <AuthContext.Provider value={{ user, profile }}>
-          {children}
-        </AuthContext.Provider>
-      </body>
-    </html>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-2xl">
+        <h1 className="mb-8 text-center text-3xl font-bold text-gray-800">
+          Welcome Back
+        </h1>
+
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mb-4 w-full rounded-lg border border-gray-300 px-4 py-3
+                     text-gray-800 placeholder-gray-500 bg-white
+                     focus:border-blue-500 focus:outline-none"
+        />
+
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="mb-6 w-full rounded-lg border border-gray-300 px-4 py-3
+                     text-gray-800 placeholder-gray-500 bg-white
+                     focus:border-blue-500 focus:outline-none"
+        />
+
+        <button
+          onClick={signIn}
+          className="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 transition"
+        >
+          Login
+        </button>
+      </div>
+    </div>
   );
 }
