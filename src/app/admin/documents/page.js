@@ -52,36 +52,41 @@ export default function DocumentUpload() {
         .from('documents')
         .getPublicUrl(filePath);
 
-      // 3. Insert row — NOW WORKS (file_url column exists!)
+      // 3. Get current user ID for uploaded_by
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // 4. Insert row — ONLY ADDED uploaded_by HERE
       const { data: doc, error: dbError } = await supabase
         .from('documents')
         .insert({
           company_id: companyId,
           file_name: file.name,
           storage_path: filePath,
-          file_url: publicUrl,                    // ← this column now exists
+          file_url: publicUrl,
           admin_context: context || null,
           important_points: important || null,
           custom_instructions: instructions || null,
           status: 'uploaded',
+          uploaded_by: user?.id,          
         })
         .select()
         .single();
 
       if (dbError) throw dbError;
 
-      // 4. CALL YOUR REAL N8N WEBHOOK (replace with your actual URL)
+      // 5. Trigger n8n (your original code)
       const n8nResponse = await fetch('https://adityags15.app.n8n.cloud/webhook-test/document-process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentId: doc.id,
+          documentId: doc.id,  
           fileUrl: publicUrl,
           fileName: file.name,
           companyId: companyId,
           adminContext: context || '',
           importantPoints: important || '',
           customInstructions: instructions || '',
+          uploaded_by: user?.id,
         }),
       });
 
@@ -101,16 +106,47 @@ export default function DocumentUpload() {
 
   return (
     <div className="max-w-4xl mx-auto p-8">
-      <h1 className="text-4xl font-bold mb-8">Upload Document</h1>
-      <div className="bg-white rounded-2xl shadow-xl p-10">
-        <input type="file" accept=".pdf,.docx,.txt" onChange={e => setFile(e.target.files?.[0])} className="mb-6 block w-full..." />
-        {/* your textareas */}
+      <h1 className="text-4xl font-extrabold mb-8 text-gray-800">Upload New Document</h1>
+
+      <div className="bg-white rounded-2xl shadow-xl p-10 border">
+        <div className="mb-6">
+          <label className="block mb-2 font-medium text-gray-800">Document File</label>
+          <input
+            type="file"
+            accept=".pdf,.docx,.txt"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="text-gray-800 w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 p-4 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-6 file:py-3 file:text-white hover:file:bg-indigo-700"
+          />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          <textarea
+            placeholder="Additional Context (optional)"
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            className="text-gray-800 p-4 border rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+          />
+          <textarea
+            placeholder="Important Points (optional)"
+            value={important}
+            onChange={(e) => setImportant(e.target.value)}
+            className="text-gray-800 p-4 border rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+          />
+        </div>
+
+        <textarea
+          placeholder="Custom Instructions for AI (optional)"
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          className="text-gray-800 w-full p-4 border rounded-xl mb-8 h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+        />
+
         <button
           onClick={handleUpload}
-          disabled={uploading}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-5 rounded-xl font-bold text-xl disabled:opacity-50"
+          disabled={uploading || !file}
+          className=" text-gray-800 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xl py-5 rounded-xl transition shadow-lg disabled:opacity-50"
         >
-          {uploading ? 'Processing...' : 'Upload & Let AI Read It'}
+          {uploading ? 'Uploading & Processing...' : 'Upload & Let AI Read It'}
         </button>
       </div>
     </div>

@@ -44,7 +44,7 @@ export default function UploadDoc() {
       body: JSON.stringify({
         fileUrl: publicUrl,
         fileName: file.name,
-        companyId: HARDCODED_COMPANY_ID,  // ← hardcoded = no RLS error
+        companyId: HARDCODED_COMPANY_ID,
       }),
     });
 
