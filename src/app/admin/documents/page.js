@@ -75,7 +75,7 @@ export default function DocumentUpload() {
       if (dbError) throw dbError;
 
       // 5. Trigger n8n (your original code)
-      const n8nResponse = await fetch('https://adityags15.app.n8n.cloud/webhook/document-process', {
+      const n8nResponse = await fetch('https://adityags15.app.n8n.cloud/webhook-test/document-process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
