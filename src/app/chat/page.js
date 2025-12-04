@@ -82,65 +82,65 @@ export default function ChatPage() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!question.trim() || !companyId || loading) return;
+  if (!question.trim() || !companyId || loading) return;
 
-    const userMessage = { role: 'user', content: question, timestamp: new Date() };
-    setMessages(prev => [...prev, userMessage]);
-    setQuestion('');
-    setLoading(true);
+  const userMessage = { role: 'user', content: question, timestamp: new Date() };
+  setMessages(prev => [...prev, userMessage]);
+  setQuestion('');
+  setLoading(true);
 
-    const assistantMsgId = Date.now();
-    setMessages(prev => [...prev, {
-      id: assistantMsgId,
-      role: 'assistant',
-      content: '',
-      streaming: true
-    }]);
+  const assistantMsgId = Date.now();
+  setMessages(prev => [...prev, {
+    id: assistantMsgId,
+    role: 'assistant',
+    content: '',
+    streaming: true
+  }]);
 
-    try {
-      const response = await fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: question.trim(),
-          companyId: companyId,
-          documentIds: selectedDocs.length > 0 ? selectedDocs : undefined
-        }),
-      });
+  try {
+    const response = await fetch("https://adityags15.app.n8n.cloud/webhook-test/880ed6d9-68cb-4a36-b63b-83c110c05def", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: question.trim(),
+        companyId: companyId,                    // yeh jaayega filter mein
+        documentIds: selectedDocs.length > 0 ? selectedDocs : undefined
+      }),
+    });
 
-      if (!response.ok || !response.body) throw new Error("Failed to connect to AI");
+    if (!response.ok || !response.body) throw new Error("AI connection failed");
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let answer = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let answer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        answer += chunk;
-
-        setMessages(prev => prev.map(m =>
-          m.id === assistantMsgId ? { ...m, content: answer } : m
-        ));
-      }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      answer += chunk;
 
       setMessages(prev => prev.map(m =>
-        m.id === assistantMsgId ? { ...m, streaming: false } : m
+        m.id === assistantMsgId ? { ...m, content: answer } : m
       ));
-
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMsgId
-          ? { ...m, content: 'Sorry, something went wrong. Please try again.', streaming: false }
-          : m
-      ));
-    } finally {
-      setLoading(false);
     }
-  };
+
+    // Final clean
+    setMessages(prev => prev.map(m =>
+      m.id === assistantMsgId ? { ...m, streaming: false } : m
+    ));
+
+  } catch (err) {
+    console.error(err);
+    setMessages(prev => prev.map(m =>
+      m.id === assistantMsgId
+        ? { ...m, content: 'Sorry, AI is waqt AI available nahi hai. Thodi der baad try karein.', streaming: false }
+        : m
+    ));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const toggleDoc = (id) => {
     setSelectedDocs(prev =>
