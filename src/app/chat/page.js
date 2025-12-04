@@ -134,7 +134,7 @@ export default function ChatPage() {
     console.error(err);
     setMessages(prev => prev.map(m =>
       m.id === assistantMsgId
-        ? { ...m, content: 'Sorry, AI is waqt AI available nahi hai. Thodi der baad try karein.', streaming: false }
+        ? { ...m, content: 'Sorry, AI is not available', streaming: false }
         : m
     ));
   } finally {
