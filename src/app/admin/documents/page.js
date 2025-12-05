@@ -2,7 +2,7 @@
 'use client';
 
 import { supabase } from '@/lib/supabase';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function DocumentUpload() {
@@ -12,6 +12,8 @@ export default function DocumentUpload() {
   const [instructions, setInstructions] = useState('');
   const [uploading, setUploading] = useState(false);
   const [companyId, setCompanyId] = useState('');
+  const [uploadStatus, setUploadStatus] = useState(''); // success or error message
+  const fileInputRef = useRef(null); // to reset file input
   const router = useRouter();
 
   useEffect(() => {
@@ -31,9 +33,10 @@ export default function DocumentUpload() {
   }, [router]);
 
   const handleUpload = async () => {
-    if (!file || !companyId) return alert('File or company not ready');
+    if (!file || !companyId) return;
 
     setUploading(true);
+    setUploadStatus('');
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -52,10 +55,10 @@ export default function DocumentUpload() {
         .from('documents')
         .getPublicUrl(filePath);
 
-      // 3. Get current user ID for uploaded_by
+      // 3. Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 4. Insert row — ONLY ADDED uploaded_by HERE
+      // 4. Insert into documents table
       const { data: doc, error: dbError } = await supabase
         .from('documents')
         .insert({
@@ -67,70 +70,84 @@ export default function DocumentUpload() {
           important_points: important || null,
           custom_instructions: instructions || null,
           status: 'uploaded',
-          uploaded_by: user?.id,          
+          uploaded_by: user?.id,
         })
         .select()
         .single();
 
       if (dbError) throw dbError;
 
-      // 5. Trigger n8n (your original code)
-      const n8nResponse = await fetch('https://adityags15.app.n8n.cloud/webhook-test/document-process', {
+      // 5. Trigger n8n
+      const n8nRes = await fetch('https://adityags15.app.n8n.cloud/webhook/document-process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentId: doc.id,  
+          documentId: doc.id,
           fileUrl: publicUrl,
           fileName: file.name,
           companyId: companyId,
           adminContext: context || '',
           importantPoints: important || '',
           customInstructions: instructions || '',
-          uploaded_by: user?.id,
         }),
       });
 
-      if (!n8nResponse.ok) throw new Error('n8n webhook failed');
+      if (!n8nRes.ok) throw new Error('n8n failed');
 
-      alert('Success! AI is now reading your document...');
-      router.push('/admin/documents');
+      setFile(null);
+      setContext('');
+      setImportant('');
+      setInstructions('');
+      setUploadStatus('Success! Document uploaded and AI is processing it...');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      setTimeout(() => setUploadStatus(''), 5000);
+
     } catch (err) {
       console.error(err);
-      alert('Failed: ' + err.message);
+      setUploadStatus('Error: ' + err.message);
     } finally {
       setUploading(false);
     }
   };
 
-  if (!companyId) return <div className="p-8 text-center">Loading...</div>;
+  if (!companyId) return <div className="p-8  text-gray-800 text-center text-xl">Loading...</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-8">
       <h1 className="text-4xl font-extrabold mb-8 text-gray-800">Upload New Document</h1>
 
       <div className="bg-white rounded-2xl shadow-xl p-10 border">
+        {/* Success/Error Message */}
+        {uploadStatus && (
+          <div className={`mb-6 p-4 rounded-lg text-gray-800 text-center font-medium ${uploadStatus.includes('Success') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {uploadStatus}
+          </div>
+        )}
+
         <div className="mb-6">
           <label className="block mb-2 font-medium text-gray-800">Document File</label>
           <input
+            ref={fileInputRef}
             type="file"
             accept=".pdf,.docx,.txt"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="text-gray-800 w-full cursor-pointer rounded-lg border border-gray-300 bg-gray-50 p-4 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-6 file:py-3 file:text-white hover:file:bg-indigo-700"
+            className="w-full text-gray-800 cursor-pointer rounded-lg border border-gray-300 bg-gray-50 p-4 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-6 file:py-3 file:text-white hover:file:bg-indigo-700"
           />
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="grid  text-gray-800 md:grid-cols-2 gap-6 mb-6">
           <textarea
             placeholder="Additional Context (optional)"
             value={context}
             onChange={(e) => setContext(e.target.value)}
-            className="text-gray-800 p-4 border rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+            className="p-4 border text-gray-800 rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
           />
           <textarea
             placeholder="Important Points (optional)"
             value={important}
             onChange={(e) => setImportant(e.target.value)}
-            className="text-gray-800 p-4 border rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+            className="p-4 text-gray-800 border rounded-xl h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
           />
         </div>
 
@@ -138,13 +155,13 @@ export default function DocumentUpload() {
           placeholder="Custom Instructions for AI (optional)"
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
-          className="text-gray-800 w-full p-4 border rounded-xl mb-8 h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
+          className="w-full text-gray-800 p-4 border rounded-xl mb-8 h-32 resize-none focus:ring-2 focus:ring-indigo-300 outline-none"
         />
 
         <button
           onClick={handleUpload}
           disabled={uploading || !file}
-          className=" text-gray-800 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xl py-5 rounded-xl transition shadow-lg disabled:opacity-50"
+          className="w-full text-gray-800 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xl py-5 rounded-xl transition shadow-lg disabled:opacity-50"
         >
           {uploading ? 'Uploading & Processing...' : 'Upload & Let AI Read It'}
         </button>

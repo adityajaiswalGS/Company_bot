@@ -1,3 +1,4 @@
+// src/app/admin/page.js
 'use client';
 
 import { supabase } from '@/lib/supabase';
@@ -11,146 +12,177 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Load all users in this company
+  const [message, setMessage] = useState({ text: '', type: '' }); 
   useEffect(() => {
     if (profile?.company_id) {
-      supabase
-        .from('profiles')
-        .select('id, full_name, role')
-        .eq('company_id', profile.company_id)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => setUsers(data || []));
+      loadUsers();
     }
   }, [profile]);
 
- const createUser = async () => {
-  if (!email || !password || !fullName) return alert('Fill all fields');
+  const loadUsers = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, created_at')
+      .eq('company_id', profile.company_id)
+      .order('created_at', { ascending: false });
 
-  setLoading(true);
+    setUsers(data || []);
+  };
 
-  // Sign up the user
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/auth/callback`,  // Optional: for future redirects
-    },
-  });
+  const createUser = async () => {
+    if (!email || !password || !fullName) {
+      setMessage({ text: 'Please fill all fields', type: 'error' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+      return;
+    }
 
-  if (signUpError) {
-    console.error('SignUp Error:', signUpError);  // Log full error
-    alert(`Error creating user: ${signUpError.message}\n\nFull details: ${JSON.stringify(signUpError)}`);
-    setLoading(false);
-    return;
-  }
+    setLoading(true);
+    setMessage({ text: '', type: '' });
 
-  if (!signUpData.user) {
-    alert('User created but no profile returned. Check console.');
-    setLoading(false);
-    return;
-  }
+    try {
+      // 1. Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
 
-  // Add profile
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .insert({
-      id: signUpData.user.id,
-      full_name: fullName,
-      role: 'user',
-      company_id: profile.company_id,
-    });
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('User created but no user returned');
 
-  if (profileError) {
-    alert(`Profile error: ${profileError.message}`);
-  } else {
-    alert('User created successfully! They can log in now.');
-    setEmail('');
-    setPassword('');
-    setFullName('');
-    // Refresh users list
-    setUsers(prev => [...prev, { 
-      id: signUpData.user.id, 
-      full_name: fullName, 
-      role: 'user' 
-    }]);
-  }
+      // 2. Create profile
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: authData.user.id,
+        full_name: fullName,
+        role: 'user',
+        company_id: profile.company_id,
+      });
 
-  setLoading(false);
-};
+      if (profileError) throw profileError;
 
-  if (!profile) return <div>Loading...</div>;
+      // SUCCESS
+      setMessage({ text: `User "${fullName}" created successfully!`, type: 'success' });
+
+      // Reset form
+      setEmail('');
+      setPassword('');
+      setFullName('');
+
+      // Refresh users list
+      loadUsers();
+
+      // Auto-clear message
+      setTimeout(() => setMessage({ text: '', type: '' }), 5000);
+    } catch (err) {
+      console.error('Create user error:', err);
+      setMessage({
+        text: err.message || 'Failed to create user',
+        type: 'error',
+      });
+      setTimeout(() => setMessage({ text: '', type: '' }), 6000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!profile) return <div className="p-8 text-center text-2xl">Loading...</div>;
 
   return (
-   <div>
-  <h1 className="mb-8 text-4xl font-bold text-gray-800">
-    Welcome, {profile.full_name || 'Admin'}
-  </h1>
+    <div className="max-w-6xl mx-auto p-8">
+      <h1 className="mb-10 text-5xl font-extrabold text-gray-800">
+        Welcome, {profile.full_name || 'Admin'}
+      </h1>
 
-  {/* Create User Form */}
-  <div className="mb-12 rounded-xl bg-white p-8 shadow-lg">
-   <h2 className="mb-6 text-2xl font-bold text-gray-800">Add New User</h2>
-
-
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="rounded-lg border border-gray-300 p-4 text-gray-800 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none transition"
-      />
-
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="rounded-lg border border-gray-300 p-4 text-gray-800 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none transition"
-      />
-
-      <input
-        type="text"
-        placeholder="Full Name"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
-        className="rounded-lg border border-gray-300 p-4 text-gray-800 placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none transition"
-      />
-    </div>
-
-    <button
-      onClick={createUser}
-      disabled={loading}
-      className="mt-6 rounded-lg bg-green-600 px-8 py-4 text-white font-bold hover:bg-green-700 disabled:opacity-50 transition"
-    >
-      {loading ? 'Creating...' : 'Create User'}
-    </button>
-  </div>
-
-  {/* Users List */}
-  <div className="rounded-xl bg-white p-8 shadow-lg">
-    <h2 className="mb-6 text-2xl font-bold text-gray-800">All Users ({users.length})</h2>
-
-    <div className="grid gap-4 md:grid-cols-2">
-      {users.map((u) => (
-        <div key={u.id} className="rounded-lg border p-6">
-          <p className="text-lg font-semibold text-gray-800">{u.full_name || 'No name'}</p>
-          <p className="text-sm text-gray-600">{u.id}</p>
-
-          <span
-            className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${
-              u.role === 'admin'
-                ? 'bg-purple-600 text-white'
-                : 'bg-blue-600 text-white'
-            }`}
-          >
-            {u.role.toUpperCase()}
-          </span>
+      {/* Message */}
+      {message.text && (
+        <div
+          className={`mb-8 p-5 rounded-xl text-center text-lg font-medium shadow-lg ${
+            message.type === 'success'
+              ? 'bg-green-100 text-green-800 border-2 border-green-300'
+              : 'bg-red-100 text-red-800 border-2 border-red-300'
+          }`}
+        >
+          {message.text}
         </div>
-      ))}
-    </div>
-  </div>
-</div>
+      )}
 
+      {/* Create User Form */}
+      <div className="mb-12 rounded-2xl bg-white p-10 shadow-2xl border border-gray-200">
+        <h2 className="mb-8 text-3xl font-bold text-gray-800">Add New User</h2>
+
+        <div className="grid grid-cols-1 text-gray-800 md:grid-cols-3 gap-6 mb-8">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="rounded-xl border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          />
+          <input
+            type="password"
+            placeholder="Password (min 6 chars)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="rounded-xl border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          />
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="rounded-xl border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          />
+        </div>
+
+        <button
+          onClick={createUser}
+          disabled={loading}
+          className="w-full md:w-auto px-12 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold text-xl rounded-xl shadow-lg disabled:opacity-60 transition transform hover:scale-105"
+        >
+          {loading ? 'Creating User...' : 'Create User'}
+        </button>
+      </div>
+
+      {/* Users List */}
+      <div className="rounded-2xl bg-white p-10 shadow-2xl border border-gray-200">
+        <h2 className="mb-8 text-3xl font-bold text-gray-800">
+          All Users in Your Company ({users.length})
+        </h2>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {users.map((u) => (
+            <div
+              key={u.id}
+              className="rounded-xl border-2 border-gray-200 p-6 bg-gradient-to-br from-gray-50 to-white shadow-md hover:shadow-xl transition"
+            >
+              <h3 className="text-xl font-bold text-gray-800">{u.full_name || 'No Name'}</h3>
+              <p className="text-sm text-gray-500 mt-1 truncate">{u.id}</p>
+
+              <div className="mt-4">
+                <span
+                  className={`inline-block text-gray-800 px-4 py-2 rounded-full text-sm font-bold ${
+                    u.role === 'admin'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-blue-600 text-white'
+                  }`}
+                >
+                  {u.role.toUpperCase()}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-400 mt-3">
+                Joined: {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {users.length === 0 && (
+          <p className="text-center text-gray-800 text-lg mt-10">No users yet. Create the first one above!</p>
+        )}
+      </div>
+    </div>
   );
 }

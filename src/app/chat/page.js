@@ -6,9 +6,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box, Paper, Typography, TextField, Button, List, ListItem, ListItemText, ListItemIcon,
-  Checkbox, Divider, Chip, CircularProgress, IconButton
+  Checkbox, Chip, CircularProgress, IconButton, Drawer
 } from '@mui/material';
-import { Send, CheckBoxOutlineBlank, CheckBox, Refresh, Logout } from '@mui/icons-material';
+import { Send, Menu, Refresh, Logout, FolderOpen } from '@mui/icons-material';
 import Description from '@mui/icons-material/Description';
 
 export default function ChatPage() {
@@ -20,11 +20,11 @@ export default function ChatPage() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshLoading, setRefreshLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // ← CLOSED BY DEFAULT
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
-  const WEBHOOK_URL =
-    "https://adityags15.app.n8n.cloud/webhook/b4b1e062-e52b-4299-af28-4b280d63ce0d";
+  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05def";
 
   useEffect(() => {
     loadUserAndDocs();
@@ -43,32 +43,20 @@ export default function ChatPage() {
 
     if (profile?.company_id) {
       setCompanyId(profile.company_id);
-
-      const { data: docs } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .eq('status', 'ready')
-        .order('created_at', { ascending: false });
-
-      setDocuments(docs || []);
-      if (docs?.length) setSelectedDocs(docs.map(d => d.id));
+      await refreshDocs(profile.company_id);
     }
   };
 
-  const refreshDocs = async () => {
-    if (!companyId) return;
+  const refreshDocs = async (cid) => {
     setRefreshLoading(true);
-
     const { data: docs } = await supabase
       .from('documents')
-      .select('*')
-      .eq('company_id', companyId)
+      .select('id, file_name, status, auto_summary')
+      .eq('company_id', cid || companyId)
       .eq('status', 'ready')
       .order('created_at', { ascending: false });
 
     setDocuments(docs || []);
-    if (docs?.length) setSelectedDocs(docs.map(d => d.id));
     setRefreshLoading(false);
   };
 
@@ -82,65 +70,45 @@ export default function ChatPage() {
   }, [messages]);
 
   const handleSend = async () => {
-  if (!question.trim() || !companyId || loading) return;
+    if (!question.trim() || selectedDocs.length === 0 || loading) return;
 
-  const userMessage = { role: 'user', content: question, timestamp: new Date() };
-  setMessages(prev => [...prev, userMessage]);
-  setQuestion('');
-  setLoading(true);
+    const userMessage = { role: 'user', content: question };
+    setMessages(prev => [...prev, userMessage]);
+    setQuestion('');
+    setLoading(true);
 
-  const assistantMsgId = Date.now();
-  setMessages(prev => [...prev, {
-    id: assistantMsgId,
-    role: 'assistant',
-    content: '',
-    streaming: true
-  }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: 'Thinking...' }]);
 
-  try {
-    const response = await fetch("https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05def", {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question: question.trim(),
-        companyId: companyId,                    // yeh jaayega filter mein
-        documentIds: selectedDocs.length > 0 ? selectedDocs : undefined
-      }),
-    });
+    try {
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: question.trim(),
+          company_id: companyId,
+          selected_doc_ids: selectedDocs,
+        }),
+      });
 
-    if (!response.ok || !response.body) throw new Error("AI connection failed");
+      if (!response.ok) throw new Error('AI failed');
+      const answer = await response.text();
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let answer = '';
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1].content = answer.trim() || 'No response received.';
+        return updated;
+      });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      answer += chunk;
-
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMsgId ? { ...m, content: answer } : m
-      ));
+    } catch (err) {
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1].content = 'Sorry, AI is not responding right now.';
+        return updated;
+      });
+    } finally {
+      setLoading(false);
     }
-
-    // Final clean
-    setMessages(prev => prev.map(m =>
-      m.id === assistantMsgId ? { ...m, streaming: false } : m
-    ));
-
-  } catch (err) {
-    console.error(err);
-    setMessages(prev => prev.map(m =>
-      m.id === assistantMsgId
-        ? { ...m, content: 'Sorry, AI is not available', streaming: false }
-        : m
-    ));
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const toggleDoc = (id) => {
     setSelectedDocs(prev =>
@@ -151,140 +119,165 @@ export default function ChatPage() {
   const selectAll = () => setSelectedDocs(documents.map(d => d.id));
   const clearAll = () => setSelectedDocs([]);
 
-  if (!companyId) return <Box p={4}><CircularProgress /></Box>;
+  if (!companyId) return (
+    <Box display="flex" height="100vh" alignItems="center" justifyContent="center">
+      <CircularProgress />
+    </Box>
+  );
 
   return (
-    <Box display="flex" height="100vh" bgcolor="#f5f5f5">
+    <Box display="flex" height="100vh" bgcolor="#f1f5f9" position="relative">
+
+      {/* TOGGLE BUTTON - CLEAN & FIXED */}
+      <IconButton
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        sx={{
+          position: 'absolute',
+          left: sidebarOpen ? 350 : 16,
+          top: 16,
+          zIndex: 1400,
+          bgcolor: 'white',
+          boxShadow: 6,
+          width: 56,
+          height: 56,
+          border: '2px solid #e0e0e0',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': { bgcolor: '#f8f9fa', transform: 'scale(1.08)' },
+        }}
+      >
+        {sidebarOpen ? <FolderOpen /> : <Menu />}
+      </IconButton>
 
       {/* SIDEBAR */}
-      <Paper elevation={3} sx={{ width: 300, p: 2, overflowY: 'auto' }}>
-        <Box display="flex" justifyContent="space-between" mb={2}>
-          <Button startIcon={<Refresh />} variant="outlined" size="small" onClick={refreshDocs} disabled={refreshLoading}>
-            {refreshLoading ? "Refreshing..." : "Refresh"}
-          </Button>
+      <Drawer
+        variant="permanent"
+        open={sidebarOpen}
+        sx={{
+          width: sidebarOpen ? 380 : 0,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: sidebarOpen ? 380 : 0,
+            transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            overflowX: 'hidden',
+            borderRight: '1px solid #e0e0e0',
+            bgcolor: '#ffffff',
+            boxShadow: sidebarOpen ? 8 : 0,
+          },
+        }}
+      >
+        <Box p={3} pt={10}>
+          <Box display="flex" justifyContent="space-between" mb={3}>
+            <Typography variant="h6" fontWeight="bold">Your Documents</Typography>
+            <Box>
+              <IconButton onClick={refreshDocs} disabled={refreshLoading}>
+                <Refresh />
+              </IconButton>
+              <IconButton onClick={logout} color="error">
+                <Logout />
+              </IconButton>
+            </Box>
+          </Box>
 
-          <Button startIcon={<Logout />} variant="outlined" color="error" size="small" onClick={logout}>
-            Logout
-          </Button>
-        </Box>
+          <Box mb={2} gap={1} display="flex">
+            <Button size="small" variant="outlined" fullWidth onClick={selectAll}>Select All</Button>
+            <Button size="small" variant="outlined" fullWidth onClick={clearAll}>Clear</Button>
+          </Box>
 
-        <Typography variant="h6" mb={2}>Your Documents ({documents.length})</Typography>
-
-        <Button onClick={selectAll} size="small" fullWidth sx={{ mb: 1 }}>Select All</Button>
-        <Button onClick={clearAll} size="small" fullWidth sx={{ mb: 2 }}>Clear All</Button>
-
-        <List dense>
-          {documents.map(doc => (
-            <ListItem key={doc.id}
-              secondaryAction={
-                <Checkbox
-                  edge="end"
-                  checked={selectedDocs.includes(doc.id)}
-                  onChange={() => toggleDoc(doc.id)}
-                  icon={<CheckBoxOutlineBlank />}
-                  checkedIcon={<CheckBox />}
-                />
-              }
-            >
-              <ListItemIcon><Description /></ListItemIcon>
-              <ListItemText
-                primary={doc.file_name}
-                secondary={
-                  <>
-                    <Typography variant="caption" display="block">
-                      {doc.auto_summary?.substring(0, 100)}...
-                    </Typography>
-                    <Chip label={doc.status} size="small" color="success" sx={{ mt: 0.5 }} />
-                  </>
-                }
-              />
-            </ListItem>
-          ))}
-        </List>
-      </Paper>
-
-      {/* MAIN CHAT */}
-      <Box flex={1} display="flex" flexDirection="column">
-        
-        {/* HEADER FIXED */}
-        <Box p={2} bgcolor="white" borderBottom={1} borderColor="divider">
-          <Typography variant="h6" sx={{ color: "black", fontWeight: 600 }}>
-            AI Assistant
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            {selectedDocs.length} selected
           </Typography>
 
-          <Chip
-            label={`Company ID: ${companyId.substring(0, 10)}...`}
-            size="small"
-            sx={{
-              color: "black",
-              bgcolor: "#e0e0e0",
-              fontWeight: 600
-            }}
-          />
+          <List sx={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
+            {documents.length === 0 ? (
+              <Typography textAlign="center" color="text.secondary" mt={6}>
+                No documents ready
+              </Typography>
+            ) : (
+              documents.map(doc => (
+                <ListItem
+                  key={doc.id}
+                  secondaryAction={<Checkbox checked={selectedDocs.includes(doc.id)} onChange={() => toggleDoc(doc.id)} />}
+                  sx={{ borderRadius: 2, mb: 1, bgcolor: selectedDocs.includes(doc.id) ? '#e3f2fd' : 'transparent' }}
+                >
+                  <ListItemIcon><Description color={selectedDocs.includes(doc.id) ? 'primary' : 'action'} /></ListItemIcon>
+                  <ListItemText
+                    primary={doc.file_name}
+                    secondary={doc.auto_summary?.substring(0, 80) + '...'}
+                  />
+                </ListItem>
+              ))
+            )}
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* MAIN CHAT AREA */}
+      <Box flex={1} display="flex" flexDirection="column" ml={sidebarOpen ? 0 : '70px'} transition="margin 0.35s">
+
+        <Box p={3} pl={4} bgcolor="white" borderBottom={1} borderColor="divider">
+          <Typography variant="h5" fontWeight="bold">AI Assistant</Typography>
+          <Chip label={`Company ID: ${companyId.substring(0, 8)}...`} size="small" sx={{ mt: 1 }} />
         </Box>
 
-        <Box flex={1} p={3} sx={{ overflowY: 'auto' }}>
+        <Box flex={1} p={5} sx={{ overflowY: 'auto', bgcolor: '#f8fafc' }}>
           {messages.length === 0 ? (
-            <Typography textAlign="center" color="text.secondary" mt={8}>
-              Select documents and ask anything!
-            </Typography>
+            <Box textAlign="center" mt={12}>
+              <FolderOpen sx={{ fontSize: 80, color: '#c0c0c0', mb: 3 }} />
+              <Typography variant="h6" color="text.secondary">
+                {sidebarOpen ? 'Select documents and ask a question' : 'Click the menu to open documents'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mt={2}>
+                Your company has {documents.length} document{documents.length !== 1 ? 's' : ''} ready
+              </Typography>
+            </Box>
           ) : (
             messages.map((msg, i) => (
-              <Box
-                key={i}
-                mb={3}
-                display="flex"
-                flexDirection={msg.role === 'user' ? 'row-reverse' : 'flex-start'}
-              >
+              <Box key={i} mb={4} display="flex" flexDirection={msg.role === 'user' ? 'row-reverse' : 'flex-start'}>
                 <Paper
-                  elevation={2}
+                  elevation={3}
                   sx={{
-                    maxWidth: '80%',
-                    p: 2.5,
-                    bgcolor: msg.role === 'user' ? '#1976d2' : 'white',
-                    color: msg.role === 'user' ? 'white' : 'black',  // FIXED
+                    maxWidth: '75%',
+                    p: 3,
                     borderRadius: 3,
+                    bgcolor: msg.role === 'user' ? '#1976d2' : 'white',
+                    color: msg.role === 'user' ? 'white' : 'black',
                   }}
                 >
-                  <Typography whiteSpace="pre-wrap" variant="body1">
-                    {msg.content || '...'}
-                    {msg.streaming && <span style={{ opacity: 0.7 }}> ▋</span>}
+                  <Typography whiteSpace="pre-wrap" variant="body1" fontSize="1.05rem">
+                    {msg.content}
                   </Typography>
                 </Paper>
               </Box>
             ))
           )}
-
-          {loading && (
-            <Box display="flex" justifyContent="flex-start" ml={2}>
-              <CircularProgress size={24} />
-            </Box>
-          )}
-
           <div ref={messagesEndRef} />
         </Box>
 
-        <Divider />
-
-        <Box p={2} display="flex" gap={1} bgcolor="white">
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Ask about your company's documents..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            disabled={loading}
-          />
-
-          <IconButton
-            color="primary"
-            onClick={handleSend}
-            disabled={!question.trim() || loading}
-            size="large"
-          >
-            <Send />
-          </IconButton>
+        <Box p={3} bgcolor="white" borderTop={1} borderColor="divider">
+          <Box display="flex" gap={2}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder={selectedDocs.length === 0 ? "Select documents first" : "Ask about your documents..."}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+              disabled={loading || selectedDocs.length === 0}
+              sx={{
+                '& .MuiOutlinedInput-input::placeholder': { color: '#000 !important', opacity: 0.7 },
+                '& .MuiOutlinedInput-root': { borderRadius: 3 }
+              }}
+            />
+            <Button
+              variant="contained"
+              size="large"
+              onClick={handleSend}
+              disabled={loading || selectedDocs.length === 0 || !question.trim()}
+              sx={{ px: 6, borderRadius: 3 }}
+            >
+              <Send />
+            </Button>
+          </Box>
         </Box>
       </Box>
     </Box>
