@@ -98,7 +98,7 @@ export default function ChatPage() {
   }]);
 
   try {
-    const response = await fetch("https://adityags15.app.n8n.cloud/webhook-test/880ed6d9-68cb-4a36-b63b-83c110c05def", {
+    const response = await fetch("https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05def", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
