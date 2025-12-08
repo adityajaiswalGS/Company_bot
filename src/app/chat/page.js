@@ -24,7 +24,7 @@ export default function ChatPage() {
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
-  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05def";
+  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook-test/880ed6d9-68cb-4a36-b63b-83c110c05defg";
 
 
   useEffect(() => {
