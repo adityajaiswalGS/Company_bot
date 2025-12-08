@@ -106,7 +106,7 @@ export default function AdminDashboard() {
       <div className="mb-12 rounded-2xl bg-white p-10 shadow-2xl border border-gray-200">
         <h2 className="mb-8 text-3xl font-bold text-gray-800">Add New User</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid text-gray-800 grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <input
             type="email"
             placeholder="Email"

@@ -218,7 +218,7 @@ export default function ChatPage() {
        {/* HEADER - SHOW USER NAME */}
 <Box p={3} pl={4} bgcolor="white" borderBottom={1} borderColor="divider">
   <Typography variant="h5" fontWeight="bold" color='black'>
-    Chat with {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
+    Hello! {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
   </Typography>
   <Chip 
     label={`Company ID: ${companyId.substring(0, 8)}...`} 
