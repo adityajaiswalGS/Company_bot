@@ -41,9 +41,14 @@ export default function AdminLayout({ children }) {
             <a href="/admin" className={`block py-4 px-6 rounded-xl text-lg font-medium transition-all ${pathname === '/admin' ? 'bg-white text-indigo-900 shadow-xl' : 'hover:bg-indigo-800'}`}>
               Dashboard
             </a>
-            <a href="/admin/documents" className={`block py-4 px-6 rounded-xl text-lg font-medium transition-all ${pathname.startsWith('/admin/documents') ? 'bg-white text-indigo-900 shadow-xl' : 'hover:bg-indigo-800'}`}>
-              Documents
-            </a>
+            <a 
+  href="/admin/documents" 
+  className={`block py-4 px-6 rounded-xl text-lg font-medium transition-all ${
+    pathname === '/admin/documents' ? 'bg-white text-indigo-900 shadow-xl' : 'hover:bg-indigo-800'
+  }`}
+>
+  Documents
+</a>
           </nav>
         </aside>
 
