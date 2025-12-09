@@ -1,10 +1,10 @@
+// src/app/layout.js
 'use client';
 
 import './globals.css';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState, createContext } from 'react';
 
-// Context to share user & profile
 export const AuthContext = createContext({});
 
 export default function RootLayout({ children }) {
@@ -13,14 +13,15 @@ export default function RootLayout({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
       setLoading(false);
-    });
+    };
 
-    // Listen to login/logout
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    initAuth();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
@@ -28,39 +29,36 @@ export default function RootLayout({ children }) {
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  // Load profile when user changes
   useEffect(() => {
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (!error && data) {
-            setProfile(data);
-          }
-        });
-    } else {
+    if (!user) {
       setProfile(null);
+      return;
     }
-  }, [user]);
 
-  if (loading) {
-    return (
-      <html lang="en">
-        <body className="flex h-screen items-center justify-center text-2xl">
-          Loading...
-        </body>
-      </html>
-    );
-  }
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        setProfile(data || null);
+      })
+      .catch(() => {
+        setProfile(null);
+      });
+  }, [user]);
 
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-50">
         <AuthContext.Provider value={{ user, profile, loading }}>
-          {children}
+          {loading ? (
+            <div className="flex h-screen items-center justify-center text-2xl font-medium text-gray-600">
+              Loading...
+            </div>
+          ) : (
+            children
+          )}
         </AuthContext.Provider>
       </body>
     </html>
