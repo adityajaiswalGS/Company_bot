@@ -20,7 +20,7 @@ export default function ChatPage() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshLoading, setRefreshLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // ← CLOSED BY DEFAULT
+  const [sidebarOpen, setSidebarOpen] = useState(false); 
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
@@ -129,7 +129,7 @@ export default function ChatPage() {
   return (
     <Box display="flex" height="100vh" bgcolor="#f1f5f9" position="relative">
 
-      {/* TOGGLE BUTTON - CLEAN & FIXED */}
+      
       <IconButton
         onClick={() => setSidebarOpen(!sidebarOpen)}
         sx={{

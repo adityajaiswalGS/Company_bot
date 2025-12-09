@@ -10,40 +10,43 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    // Create user with service key
-    const { data: newUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
+    const { data: newUser, error: authError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
 
     if (authError) {
-      if (authError.message.includes('already registered')) {
-        return NextResponse.json({ error: 'User already exists' }, { status: 409 });
+      if (authError.message?.includes('already')) {
+        return NextResponse.json(
+          { error: 'User already exists' },
+          { status: 409 }
+        );
       }
       throw authError;
     }
 
-    // UPSERT PROFILE — NEVER BREAKS ON DUPLICATE
-    const { error: upsertError } = await supabaseAdmin
-      .from('profiles')
-      .upsert(
-        {
-          id: newUser.user.id,
-          full_name: fullName,
-          role: 'user',
-          company_id: companyId,
-        },
-        { onConflict: 'id' }
-      );
+    const userId = newUser.user.id;
 
-    if (upsertError) throw upsertError;
+    const { error: rpcError } = await supabaseAdmin.rpc(
+      'create_company_user',
+      {
+        _id: userId,
+        _full_name: fullName,
+        _company_id: companyId
+      }
+    );
 
-    return NextResponse.json({ success: true });
+    if (rpcError) throw rpcError;
+
+    return NextResponse.json({ success: true }, { status: 200 });
 
   } catch (err) {
     console.error('Create user error:', err);
-    return NextResponse.json({ error: err.message || 'Failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || 'Server error' },
+      { status: 500 }
+    );
   }
 }
