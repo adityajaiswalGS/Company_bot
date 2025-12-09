@@ -4,7 +4,6 @@
 import { supabase } from '@/lib/supabase';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../layout';
-import { supabaseAdmin } from '@/lib/supabase';
 
 export default function AdminDashboard() {
   const { profile } = useContext(AuthContext);
@@ -61,7 +60,15 @@ export default function AdminDashboard() {
 
     const data = await res.json();
 
-    if (!res.ok) throw new Error(data.error || 'Failed');
+    // THIS HANDLES DUPLICATE EMAIL GRACEFULLY
+    if (!res.ok) {
+      if (res.status === 409 || data.error?.includes('already')) {
+        showMessage('User with this email already exists', 'error');
+      } else {
+        showMessage(data.error || 'Failed to create user', 'error');
+      }
+      return;
+    }
 
     showMessage(`User "${fullName}" created successfully!`, 'success');
     setEmail('');
@@ -70,12 +77,12 @@ export default function AdminDashboard() {
     loadUsers();
 
   } catch (err) {
-    showMessage(err.message || 'Failed to create user', 'error');
+    console.error('Create user error:', err);
+    showMessage('Network error — check console', 'error');
   } finally {
     setLoading(false);
   }
 };
-
 
 
   const showMessage = (text, type) => {
