@@ -5,30 +5,68 @@ import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../layout';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
+import {
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Avatar,
+  Chip,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import { Refresh, PersonAdd } from '@mui/icons-material';
 
-// YUP VALIDATION SCHEMA
 const UserSchema = Yup.object().shape({
   email: Yup.string().email('Invalid email').required('Email is required'),
   password: Yup.string().min(6, 'Password must be 6+ chars').required('Password is required'),
   fullName: Yup.string().min(2, 'Too short').required('Full name is required'),
 });
 
+const PAGE_SIZE = 6;
+
 export default function AdminDashboard() {
   const { profile } = useContext(AuthContext);
   const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
 
   useEffect(() => {
-    if (profile?.company_id) loadUsers();
+    if (profile?.company_id) loadUsers(0);
   }, [profile]);
 
-  const loadUsers = async () => {
-    const { data } = await supabase
+  const loadUsers = async (start = 0) => {
+    if (!profile?.company_id) return;
+
+    setLoading(true);
+
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role, created_at')
       .eq('company_id', profile.company_id)
-      .order('created_at', { ascending: false });
-    setUsers(data || []);
+      .order('created_at', { ascending: false })
+      .range(start, start + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('Load users error:', error);
+      setHasMore(false);
+    } else {
+      if (start === 0) {
+        setUsers(data || []);
+      } else {
+        setUsers(prev => [...prev, ...data]);
+      }
+      setHasMore(data.length === PAGE_SIZE);
+    }
+
+    setLoading(false);
+  };
+
+  const loadMore = () => {
+    if (hasMore && !loading) {
+      loadUsers(users.length);
+    }
   };
 
   const showMessage = (text, type = 'success') => {
@@ -52,17 +90,13 @@ export default function AdminDashboard() {
       const data = await res.json();
 
       if (!res.ok) {
-        if (res.status === 409) {
-          showMessage('User with this email already exists', 'error');
-        } else {
-          showMessage(data.error || 'Failed to create user', 'error');
-        }
+        showMessage(data.error || 'Failed to create user', 'error');
         return;
       }
 
       showMessage(`User "${values.fullName}" created successfully!`, 'success');
       resetForm();
-      loadUsers();
+      loadUsers(0); // Refresh from first page
 
     } catch (err) {
       showMessage('Network error', 'error');
@@ -71,30 +105,58 @@ export default function AdminDashboard() {
     }
   };
 
-  if (!profile) return <div className="p-8 text-center text-2xl">Loading...</div>;
+  if (!profile) return (
+    <Box display="flex" height="100vh" alignItems="center" justifyContent="center">
+      <CircularProgress />
+    </Box>
+  );
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <h1 className="mb-10 text-5xl font-extrabold text-gray-800">
-        Welcome, Admin
-      </h1>
+    <div className="max-w-7xl mx-auto p-6">
+      {/* HEADER */}
+      <Box mb={8} textAlign="center">
+        <Typography variant="h3" fontWeight="bold" className="text-gray-800">
+          Welcome, Admin
+        </Typography>
+        <Typography variant="h6" color="text.secondary" mt={2}>
+          Manage users in your company
+        </Typography>
+      </Box>
 
       {/* MESSAGE */}
       {message.text && (
-        <div
-          className={`mb-8 p-5 rounded-xl text-center text-lg font-medium shadow-lg border-2 ${
+        <Box
+          mb={6}
+          p={4}
+          borderRadius={3}
+          textAlign="center"
+          className={`shadow-lg border-2 ${
             message.type === 'success'
-              ? 'bg-green-100 text-green-800 border-green-300'
-              : 'bg-red-100 text-red-800 border-red-300'
+              ? 'bg-green-50 text-green-800 border-green-300'
+              : 'bg-red-50 text-red-800 border-red-300'
           }`}
         >
-          {message.text}
-        </div>
+          <Typography variant="h6" fontWeight="medium">
+            {message.text}
+          </Typography>
+        </Box>
       )}
 
-      {/* ADD USER FORM — FORMIK + YUP */}
-      <div className="mb-12 rounded-2xl bg-white p-10 shadow-2xl border border-gray-200">
-        <h2 className="mb-8 text-3xl font-bold text-gray-800">Add New User</h2>
+      {/* ADD USER FORM */}
+      <Box
+        component="section"
+        bgcolor="white"
+        borderRadius={4}
+        boxShadow={6}
+        p={6}
+        mb={10}
+      >
+        <Box display="flex" alignItems="center" gap={2} mb={6}>
+          <PersonAdd sx={{ fontSize: 32, color: '#6366f1' }} />
+          <Typography variant="h5" color='black' fontWeight="bold">
+            Add New User
+          </Typography>
+        </Box>
 
         <Formik
           initialValues={{ email: '', password: '', fullName: '' }}
@@ -109,9 +171,11 @@ export default function AdminDashboard() {
                     name="email"
                     type="email"
                     placeholder="Email"
-                    className="w-full text-gray-800 rounded-xl border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+                    className="w-full rounded-xl border-2 text-gray-800 border-gray-300 px-6 py-4 text-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition"
                   />
-                  <ErrorMessage name="email" component="p" className="text-red-600 text-sm mt-1" />
+                  <ErrorMessage name="email">
+                    {(msg) => <p className="mt-2 text-sm text-red-600 font-medium">{msg}</p>}
+                  </ErrorMessage>
                 </div>
 
                 <div>
@@ -119,9 +183,11 @@ export default function AdminDashboard() {
                     name="password"
                     type="password"
                     placeholder="Password (min 6 chars)"
-                    className="w-full  text-gray-800 rounded-xl border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+                    className="w-full rounded-xl text-gray-800 border-2 border-gray-300 px-6 py-4 text-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition"
                   />
-                  <ErrorMessage name="password" component="p" className="text-red-600 text-sm mt-1" />
+                  <ErrorMessage name="password">
+                    {(msg) => <p className="mt-2 text-sm text-red-600 font-medium">{msg}</p>}
+                  </ErrorMessage>
                 </div>
 
                 <div>
@@ -129,60 +195,120 @@ export default function AdminDashboard() {
                     name="fullName"
                     type="text"
                     placeholder="Full Name"
-                    className="w-full rounded-xl text-gray-800 border-2 border-gray-300 px-6 py-4 text-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+                    className="w-full rounded-xl border-2 text-gray-800 border-gray-300 px-6 py-4 text-lg focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition"
                   />
-                  <ErrorMessage name="fullName" component="p" className="text-red-600 text-sm mt-1" />
+                  <ErrorMessage name="fullName">
+                    {(msg) => <p className="mt-2 text-sm text-red-600 font-medium">{msg}</p>}
+                  </ErrorMessage>
                 </div>
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full md:w-auto px-12 py-5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold text-xl rounded-xl shadow-lg disabled:opacity-60 transition transform hover:scale-105"
+                variant="contained"
+                size="large"
+                sx={{
+                  px: 8,
+                  py: 2,
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  bgcolor: '#6366f1',
+                  '&:hover': { bgcolor: '#4f46e5' },
+                  '&:disabled': { bgcolor: '#9ca3af' },
+                }}
               >
-                {isSubmitting ? 'Creating User...' : 'Create User'}
-              </button>
+                {isSubmitting ? 'Creating...' : 'Create User'}
+              </Button>
             </Form>
           )}
         </Formik>
-      </div>
+      </Box>
 
-      {/* USERS LIST */}
-      <div className="rounded-2xl bg-white p-10 shadow-2xl border border-gray-200">
-        <h2 className="mb-8 text-3xl font-bold text-gray-800">
-          All Users in Your Company ({users.length})
-        </h2>
+      {/* USERS LIST WITH PAGINATION */}
+      <Box
+        component="section"
+        bgcolor="white"
+        borderRadius={4}
+        boxShadow={6}
+        p={6}
+      >
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={6}>
+          <Typography variant="h5" color='black' fontWeight="bold">
+            All Users ({users.length})
+          </Typography>
+          <Tooltip title="Refresh">
+            <IconButton onClick={() => loadUsers(0)} disabled={loading}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {users.map((u) => (
-            <div
-              key={u.id}
-              className="rounded-xl border-2 border-gray-200 p-6 bg-gradient-to-br from-gray-50 to-white shadow-md hover:shadow-xl transition"
-            >
-              <h3 className="text-xl font-bold text-gray-800">{u.full_name || 'No Name'}</h3>
-              <p className="text-sm text-gray-500 mt-1 truncate">{u.id}</p>
-              <div className="mt-4">
-                <span
-                  className={`inline-block px-4 py-2 rounded-full text-sm font-bold text-white ${
-                    u.role === 'admin' ? 'bg-purple-600' : 'bg-blue-600'
-                  }`}
+        {users.length === 0 ? (
+          <Box textAlign="center" py={12}>
+            <Typography variant="h6" color="text.secondary">
+              No users yet. Create the first one!
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {users.map((u) => (
+                <Box
+                  key={u.id}
+                  p={5}
+                  bgcolor="gray.50"
+                  borderRadius={3}
+                  boxShadow={3}
+                  className="hover:shadow-xl transition-shadow"
                 >
-                  {u.role.toUpperCase()}
-                </span>
-              </div>
-              <p className="text-xs text-gray-400 mt-3">
-                Joined: {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
-              </p>
-            </div>
-          ))}
-        </div>
+                  <Box display="flex" alignItems="center" gap={3} mb={3}>
+                    <Avatar sx={{ bgcolor: '#6366f1', width: 56, height: 56 }}>
+                      {u.full_name?.[0]?.toUpperCase() || 'U'}
+                    </Avatar>
+                    <div>
+                      <Typography variant="h6" color='black' fontWeight="bold">
+                        {u.full_name || 'No Name'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {u.id}
+                      </Typography>
+                    </div>
+                  </Box>
 
-        {users.length === 0 && (
-          <p className="text-center text-gray-800 text-lg mt-10">
-            No users yet. Create the first one above!
-          </p>
+                  <Chip
+                    label={u.role.toUpperCase()}
+                    color={u.role === 'admin' ? 'primary' : 'default'}
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
+
+                  <Typography variant="caption" color="text.secondary">
+                    Joined: {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                  </Typography>
+                </Box>
+              ))}
+            </div>
+
+            {hasMore && (
+              <Box textAlign="center" mt={8}>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={loadMore}
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={24} /> : <Refresh />}
+                  sx={{ px: 6, py: 2 }}
+                >
+                  {loading ? 'Loading...' : 'Load More Users'}
+                </Button>
+              </Box>
+            )}
+          </>
         )}
-      </div>
+      </Box>
     </div>
   );
 }
