@@ -19,21 +19,15 @@ export default function ChatPage() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshLoading, setRefreshLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
-  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05def";
+  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05deg";
 
   useEffect(() => {
     loadUserAndDocs();
   }, []);
-
-  useEffect(() => {
-  if (companyId) {
-    refreshDocs();
-  }
-}, [companyId]);
 
   const loadUserAndDocs = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -46,26 +40,34 @@ export default function ChatPage() {
       .eq('id', user.id)
       .single();
 
-    if (!profile?.company_id) return;
+    if (!profile?.company_id) {
+      console.error('No company_id found for user');
+      return;
+    }
 
     setCompanyId(profile.company_id);
-    await refreshDocs(); // ← THIS LOADS DOCUMENTS ON LOGIN
+    await refreshDocs(profile.company_id); 
   };
 
-  const refreshDocs = async () => {
-    if (!companyId) return;
+  const refreshDocs = async (cid) => {
+    if (!cid) return;
     setRefreshLoading(true);
 
-    const { data: docs } = await supabase
+    const { data: docs, error } = await supabase
       .from('documents')
       .select('id, file_name, status, auto_summary')
-      .eq('company_id', companyId)
+      .eq('company_id', cid)          
       .eq('status', 'ready')
       .order('created_at', { ascending: false });
 
-    setDocuments(docs || []);
-    if (docs?.length > 0) {
-      setSelectedDocs(docs.map(d => d.id)); // Auto-select all
+    if (error) {
+      console.error('Refresh docs error:', error);
+      setDocuments([]);
+    } else {
+      setDocuments(docs || []);
+      if (docs?.length > 0) {
+        setSelectedDocs(docs.map(d => d.id));
+      }
     }
     setRefreshLoading(false);
   };
@@ -128,7 +130,7 @@ export default function ChatPage() {
   if (!companyId) {
     return (
       <Box display="flex" height="100vh" alignItems="center" justifyContent="center" bgcolor="#f8fafc">
-        <CircularProgress size={60} thickness="4" />
+        <CircularProgress size={60} thickness={4} />
       </Box>
     );
   }
@@ -136,26 +138,25 @@ export default function ChatPage() {
   return (
     <Box display="flex" height="100vh" bgcolor="#f8fafc">
 
-      {/* TOGGLE BUTTON — MOVED TO TOP-LEFT, NO OVERLAP */}
+      {/* TOGGLE BUTTON — NO OVERLAP WITH LOGO */}
       <IconButton
-  onClick={() => setSidebarOpen(!sidebarOpen)}
-  sx={{
-    position: 'absolute',
-    left: sidebarOpen ? 420 : 16,
-    top: 100,   // ⬅️ moved down so it does NOT overlap header/logo
-    zIndex: 1400,
-    bgcolor: 'white',
-    boxShadow: 6,
-    width: 56,
-    height: 56,
-    border: '2px solid #e0e0e0',
-    transition: 'all 0.3s ease',
-    '&:hover': { bgcolor: '#f8f9fa', transform: 'scale(1.08)' },
-  }}
->
-  {sidebarOpen ? <FolderOpen /> : <Menu />}
-</IconButton>
-
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        sx={{
+          position: 'absolute',
+          left: sidebarOpen ? 420 : 16,
+          top: 100, 
+          zIndex: 1400,
+          bgcolor: 'white',
+          boxShadow: 6,
+          width: 56,
+          height: 56,
+          border: '2px solid #e0e0e0',
+          transition: 'all 0.3s ease',
+          '&:hover': { bgcolor: '#f8f9fa', transform: 'scale(1.08)' },
+        }}
+      >
+        {sidebarOpen ? <FolderOpen /> : <Menu />}
+      </IconButton>
 
       {/* SIDEBAR */}
       <Drawer
@@ -174,13 +175,13 @@ export default function ChatPage() {
         }}
       >
         <Box p={4} height="100%" display="flex" flexDirection="column">
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb= {4}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
             <Typography variant="h5" fontWeight="bold">
-              Documents
+              Your Documents
             </Typography>
             <Box>
               <Tooltip title="Refresh">
-                <IconButton onClick={refreshDocs} disabled={refreshLoading} color="inherit">
+                <IconButton onClick={() => refreshDocs(companyId)} disabled={refreshLoading} color="inherit">
                   <Refresh />
                 </IconButton>
               </Tooltip>
@@ -213,6 +214,7 @@ export default function ChatPage() {
                       cursor: 'pointer',
                       bgcolor: selectedDocs.includes(doc.id) ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
                       '&:hover': { bgcolor: 'rgba(99, 102, 241, 0.15)' },
+                      transition: 'all 0.2s',
                     }}
                   >
                     <ListItemIcon>
@@ -228,7 +230,7 @@ export default function ChatPage() {
                       primary={doc.file_name}
                       secondary={doc.auto_summary?.substring(0, 60) + '...' || 'No summary'}
                       primaryTypographyProps={{ fontWeight: 'medium' }}
-                      secondaryTypographyProps={ { color: 'gray.400' } }
+                      secondaryTypographyProps={{ color: 'gray.400' }}
                     />
                   </ListItem>
                 ))}
@@ -254,7 +256,7 @@ export default function ChatPage() {
           <Box display="flex" alignItems="center" gap={3}>
             <SmartToy sx={{ fontSize: 40, color: '#6366f1' }} />
             <div>
-              <Typography variant="h5" fontWeight="bold" className="text-gray-800">
+              <Typography variant="h5" fontWeight="bold" color="black">
                 Company AI Assistant
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -275,7 +277,7 @@ export default function ChatPage() {
           {messages.length === 0 ? (
             <Box textAlign="center" mt={16}>
               <SmartToy sx={{ fontSize: 100, color: '#e0e0e0', mb: 4 }} />
-              <Typography variant="h5" className="text-gray-800" fontWeight="bold" gutterBottom>
+              <Typography variant="h5" color="black" fontWeight="bold" gutterBottom>
                 How can I help you today?
               </Typography>
               <Typography variant="body1" color="text.secondary">
@@ -343,7 +345,7 @@ export default function ChatPage() {
             <Button
               variant="contained"
               size="large"
-              onClick={handleSend}
+              onClick={handleSend}  
               disabled={loading || selectedDocs.length === 0 || !question.trim()}
               sx={{
                 px: 6,

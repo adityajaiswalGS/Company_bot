@@ -53,7 +53,7 @@ export default function DocumentUpload() {
 
       if (data?.company_id) {
         setCompanyId(data.company_id);
-        loadDocuments(data.company_id, 0); // Load first page
+        loadDocuments(data.company_id, 0);
       }
     };
     load();
@@ -103,7 +103,6 @@ export default function DocumentUpload() {
 
     try {
       const path = fileUrl.split('/').slice(-2).join('/');
-
       const { error: storageError } = await supabase.storage
         .from('documents')
         .remove([path]);
@@ -118,7 +117,7 @@ export default function DocumentUpload() {
       if (dbError) throw dbError;
 
       showStatus('Document deleted!', 'success');
-      loadDocuments(companyId, 0); // Refresh from start
+      loadDocuments(companyId, 0);
 
     } catch (err) {
       showStatus('Delete failed', 'error');
@@ -147,7 +146,8 @@ export default function DocumentUpload() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { error: dbError } = await supabase
+      // INSERT AND GET THE DOCUMENT ID
+      const { data: doc, error: dbError } = await supabase
         .from('documents')
         .insert({
           company_id: companyId,
@@ -159,14 +159,18 @@ export default function DocumentUpload() {
           custom_instructions: instructions || null,
           status: 'uploaded',
           uploaded_by: user?.id,
-        });
+        })
+        .select('id')  
+        .single();
 
       if (dbError) throw dbError;
 
-      const n8nRes = await fetch('https://adityags15.app.n8n.cloud/webhook/document-process', {
+      // NOW SEND documentId TO N8N
+      const n8nRes = await fetch('https://adityags15.app.n8n.cloud/webhook/document-process-part', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          documentId: doc.id,        
           fileUrl: publicUrl,
           fileName: file.name,
           companyId,
@@ -178,10 +182,10 @@ export default function DocumentUpload() {
 
       if (!n8nRes.ok) throw new Error('AI processing failed');
 
-      showStatus('Success! Document uploaded and processing by RAG...', 'success');
+      showStatus('Success! Document uploaded and processing...', 'success');
       resetForm();
       if (fileInputRef.current) fileInputRef.current.value = '';
-      loadDocuments(companyId, 0); // Refresh list
+      loadDocuments(companyId, 0);
 
     } catch (err) {
       console.error(err);
@@ -193,8 +197,8 @@ export default function DocumentUpload() {
 
   if (!companyId) {
     return (
-      <div className="flex h-screen flex items-center justify-center text-2xl text-gray-600">
-        Loading documents...
+      <div className="flex h-screen items-center justify-center text-2xl text-gray-600">
+        Loading...
       </div>
     );
   }
@@ -207,7 +211,6 @@ export default function DocumentUpload() {
       <div className="mb-12 rounded-2xl bg-white p-8 shadow-xl border border-gray-200">
         <h2 className="mb-6 text-2xl font-bold text-gray-800">Upload New Document</h2>
 
-        
         <Formik
           initialValues={{ file: null, context: '', important: '', instructions: '' }}
           validationSchema={toFormikValidationSchema(uploadSchema)}
@@ -284,8 +287,7 @@ export default function DocumentUpload() {
           </div>
         )}
       </div>
-
-      {/* DOCUMENTS LIST WITH LOAD MORE */}
+{/* DOCUMENTS LIST WITH LOAD MORE */}
       <div className="rounded-2xl bg-white p-8 shadow-xl border border-gray-200">
         <h2 className="mb-6 text-2xl font-bold text-gray-800">
           Your Documents ({documents.length})
