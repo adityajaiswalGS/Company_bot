@@ -13,7 +13,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { AuthContext } from '@/app/layout';
+import { AuthContext } from '@/components/AuthContextProvider';
 
 const PAGE_SIZE = 6;
 

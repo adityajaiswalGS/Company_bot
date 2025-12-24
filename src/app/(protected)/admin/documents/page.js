@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import UploadForm from './components/UploadForm';
 import DocumentList from './components/DocumentList';
-import { AuthContext } from '@/app/layout';
+import { AuthContext } from '@/components/AuthContextProvider';
 
 const PAGE_SIZE = 5;
 

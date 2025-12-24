@@ -1,4 +1,5 @@
 'use client';
+
 // src/components/layout/AdminSidebar.js
 
 import { useContext } from 'react';
@@ -6,24 +7,28 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Box, Typography, Button } from '@mui/material';
 import { Dashboard, UploadFile, Chat, Logout } from '@mui/icons-material';
-import { AuthContext } from '@/app/layout';
+import { AuthContext } from '@/components/AuthContextProvider';
 
 const navItems = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: <Dashboard /> },
   { label: 'Documents', href: '/admin/documents', icon: <UploadFile /> },
-  { label: 'Chat', href: '/chat', icon: <Chat /> },
+  { label: 'Chat', href: '/admin/chat', icon: <Chat /> },  
 ];
 
 export default function AdminSidebar() {
-
-
-const { profile, loading } = useContext(AuthContext);
+  const { profile } = useContext(AuthContext);
   const pathname = usePathname();
   const router = useRouter();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace('/login');
+  };
+
+  // Helper to check active state
+  const isActive = (href) => {
+    if (href === '/admin/dashboard') return pathname === '/admin/dashboard';
+    return pathname.startsWith(href);
   };
 
   return (
@@ -59,7 +64,7 @@ const { profile, loading } = useContext(AuthContext);
             key={item.href}
             href={item.href}
             fullWidth
-            variant={pathname.startsWith(item.href) ? 'contained' : 'text'}
+            variant={isActive(item.href) ? 'contained' : 'text'}
             color="primary"
             startIcon={item.icon}
             sx={{
@@ -68,11 +73,11 @@ const { profile, loading } = useContext(AuthContext);
               mb: 1,
               borderRadius: 2,
               textTransform: 'none',
-              fontWeight: pathname.startsWith(item.href) ? 'bold' : 'medium',
-              bgcolor: pathname.startsWith(item.href) ? 'primary.main' : 'transparent',
-              color: pathname.startsWith(item.href) ? 'white' : 'text.primary',
+              fontWeight: isActive(item.href) ? 'bold' : 'medium',
+              bgcolor: isActive(item.href) ? 'primary.main' : 'transparent',
+              color: isActive(item.href) ? 'white' : 'text.primary',
               '&:hover': {
-                bgcolor: pathname.startsWith(item.href) ? 'primary.dark' : 'action.hover',
+                bgcolor: isActive(item.href) ? 'primary.dark' : 'action.hover',
               },
             }}
           >
