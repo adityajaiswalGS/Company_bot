@@ -12,8 +12,9 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^5.2.2",
-    "@mui/icons-material": "^7.3.5",
+    "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
+    "@reduxjs/toolkit": "^2.11.2",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.84.0",
     "@tanstack/zod-form-adapter": "^0.42.1",
@@ -22,6 +23,7 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.68.0",
+    "react-redux": "^9.2.0",
     "yup": "^1.7.1",
     "zod": "^4.1.13",
     "zod-formik-adapter": "^2.0.0"

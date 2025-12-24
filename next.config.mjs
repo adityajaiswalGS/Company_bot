@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
   reactCompiler: true,
+  experimental: {
+    turbo: false,  // ← THIS IS THE CORRECT KEY TO DISABLE TURBOPACK
+  },
 };
 
 export default nextConfig;

@@ -1,3 +1,4 @@
+'use client';
 // src/app/page.js
 import LoginPage from './login/page';
 

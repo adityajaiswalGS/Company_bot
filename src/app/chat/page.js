@@ -1,14 +1,20 @@
 'use client';
+// src/app/chat/page.js
 
 import { supabase } from '@/lib/supabase';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Box, Paper, Typography, TextField, Button, List, ListItem, ListItemText, ListItemIcon,
-  Checkbox, Chip, CircularProgress, IconButton, Drawer, Avatar, Tooltip
-} from '@mui/material';
-import { Send, Menu, Refresh, Logout, FolderOpen, SmartToy } from '@mui/icons-material';
-import Description from '@mui/icons-material/Description';
+import { Box } from '@mui/material';
+import ChatHeader from './components/ChatHeader';
+import ChatSidebar from './components/ChatSidebar';
+import MessageList from './components/MessageList';
+import ChatInput from './components/ChatInput';
+import { CircularProgress} from '@mui/material';
+
+const profile = useSelector((state) => state.auth.profile);
+const companyId = profile?.company_id;
+
+const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05deg";
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -22,8 +28,6 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
-
-  const WEBHOOK_URL = "https://adityags15.app.n8n.cloud/webhook/880ed6d9-68cb-4a36-b63b-83c110c05deg";
 
   useEffect(() => {
     loadUserAndDocs();
@@ -40,34 +44,24 @@ export default function ChatPage() {
       .eq('id', user.id)
       .single();
 
-    if (!profile?.company_id) {
-      console.error('No company_id found for user');
-      return;
-    }
+    if (!profile?.company_id) return;
 
     setCompanyId(profile.company_id);
-    await refreshDocs(profile.company_id); 
+    await refreshDocs(profile.company_id);
   };
 
   const refreshDocs = async (cid) => {
-    if (!cid) return;
     setRefreshLoading(true);
-
-    const { data: docs, error } = await supabase
+    const { data: docs } = await supabase
       .from('documents')
       .select('id, file_name, status, auto_summary')
-      .eq('company_id', cid)          
+      .eq('company_id', cid)
       .eq('status', 'ready')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Refresh docs error:', error);
-      setDocuments([]);
-    } else {
-      setDocuments(docs || []);
-      if (docs?.length > 0) {
-        setSelectedDocs(docs.map(d => d.id));
-      }
+    setDocuments(docs || []);
+    if (docs?.length > 0) {
+      setSelectedDocs(docs.map(d => d.id));
     }
     setRefreshLoading(false);
   };
@@ -88,7 +82,6 @@ export default function ChatPage() {
     setMessages(prev => [...prev, userMessage]);
     setQuestion('');
     setLoading(true);
-
     setMessages(prev => [...prev, { role: 'assistant', content: null }]);
 
     try {
@@ -109,7 +102,6 @@ export default function ChatPage() {
         updated[updated.length - 1].content = answer.trim() || 'No response.';
         return updated;
       });
-
     } catch (err) {
       setMessages(prev => {
         const updated = [...prev];
@@ -137,230 +129,28 @@ export default function ChatPage() {
 
   return (
     <Box display="flex" height="100vh" bgcolor="#f8fafc">
-
-      {/* TOGGLE BUTTON — NO OVERLAP WITH LOGO */}
-      <IconButton
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        sx={{
-          position: 'absolute',
-          left: sidebarOpen ? 420 : 16,
-          top: 100, 
-          zIndex: 1400,
-          bgcolor: 'white',
-          boxShadow: 6,
-          width: 56,
-          height: 56,
-          border: '2px solid #e0e0e0',
-          transition: 'all 0.3s ease',
-          '&:hover': { bgcolor: '#f8f9fa', transform: 'scale(1.08)' },
-        }}
-      >
-        {sidebarOpen ? <FolderOpen /> : <Menu />}
-      </IconButton>
-
-      {/* SIDEBAR */}
-      <Drawer
-        variant="persistent"
+      <ChatSidebar
         open={sidebarOpen}
-        sx={{
-          width: sidebarOpen ? 420 : 0,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: 420,
-            bgcolor: '#1e293b',
-            color: 'white',
-            borderRight: 'none',
-            transition: 'width 0.3s ease',
-          },
-        }}
-      >
-        <Box p={4} height="100%" display="flex" flexDirection="column">
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Typography variant="h5" fontWeight="bold">
-              Your Documents
-            </Typography>
-            <Box>
-              <Tooltip title="Refresh">
-                <IconButton onClick={() => refreshDocs(companyId)} disabled={refreshLoading} color="inherit">
-                  <Refresh />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Logout">
-                <IconButton onClick={logout} color="inherit">
-                  <Logout />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        documents={documents}
+        selectedDocs={selectedDocs}
+        onToggleDoc={toggleDoc}
+        refreshLoading={refreshLoading}
+        onRefresh={() => refreshDocs(companyId)}
+        onLogout={logout}
+      />
 
-          <Typography variant="body2" color="gray.400" mb={3}>
-            {selectedDocs.length} of {documents.length} selected
-          </Typography>
-
-          <Box flex={1} overflow="auto" pr={1}>
-            {documents.length === 0 ? (
-              <Typography textAlign="center" color="gray.500" mt={8}>
-                No documents ready
-              </Typography>
-            ) : (
-              <List>
-                {documents.map((doc) => (
-                  <ListItem
-                    key={doc.id}
-                    onClick={() => toggleDoc(doc.id)}
-                    sx={{
-                      borderRadius: 2,
-                      mb: 1,
-                      cursor: 'pointer',
-                      bgcolor: selectedDocs.includes(doc.id) ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
-                      '&:hover': { bgcolor: 'rgba(99, 102, 241, 0.15)' },
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <ListItemIcon>
-                      <Checkbox
-                        edge="start"
-                        checked={selectedDocs.includes(doc.id)}
-                        tabIndex={-1}
-                        disableRipple
-                        sx={{ color: 'white' }}
-                      />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={doc.file_name}
-                      secondary={doc.auto_summary?.substring(0, 60) + '...' || 'No summary'}
-                      primaryTypographyProps={{ fontWeight: 'medium' }}
-                      secondaryTypographyProps={{ color: 'gray.400' }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Box>
-        </Box>
-      </Drawer>
-
-      {/* MAIN CHAT */}
       <Box flex={1} display="flex" flexDirection="column">
-
-        {/* HEADER */}
-        <Box
-          p={4}
-          bgcolor="white"
-          borderBottom={1}
-          borderColor="gray.200"
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-        >
-          <Box display="flex" alignItems="center" gap={3}>
-            <SmartToy sx={{ fontSize: 40, color: '#6366f1' }} />
-            <div>
-              <Typography variant="h5" fontWeight="bold" color="black">
-                Company AI Assistant
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {user?.user_metadata?.full_name || user?.email}
-              </Typography>
-            </div>
-          </Box>
-
-          <Chip
-            label={`Company: ${companyId.substring(0, 8)}...`}
-            color="primary"
-            variant="outlined"
-          />
-        </Box>
-
-        {/* MESSAGES */}
-        <Box flex={1} p={6} overflow="auto" bgcolor="#f8fafc">
-          {messages.length === 0 ? (
-            <Box textAlign="center" mt={16}>
-              <SmartToy sx={{ fontSize: 100, color: '#e0e0e0', mb: 4 }} />
-              <Typography variant="h5" color="black" fontWeight="bold" gutterBottom>
-                How can I help you today?
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Click the menu button to open documents and start chatting!
-              </Typography>
-            </Box>
-          ) : (
-            messages.map((msg, i) => (
-              <Box
-                key={i}
-                mb={6}
-                display="flex"
-                flexDirection={msg.role === 'user' ? 'row-reverse' : 'row'}
-                gap={3}
-              >
-                <Avatar sx={{ bgcolor: msg.role === 'user' ? '#6366f1' : '#10b981' }}>
-                  {msg.role === 'user' ? 'U' : <SmartToy />}
-                </Avatar>
-
-                <Paper
-                  elevation={3}
-                  sx={{
-                    maxWidth: '70%',
-                    p: 4,
-                    borderRadius: 3,
-                    bgcolor: msg.role === 'user' ? '#6366f1' : 'white',
-                    color: msg.role === 'user' ? 'white' : 'black',
-                  }}
-                >
-                  {msg.content === null ? (
-                    <CircularProgress size={24} color="inherit" />
-                  ) : (
-                    <Typography whiteSpace="pre-wrap" variant="body1" fontSize="1.1rem" lineHeight={1.7}>
-                      {msg.content}
-                    </Typography>
-                  )}
-                </Paper>
-              </Box>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </Box>
-
-        {/* INPUT */}
-        <Box p={4} bgcolor="white" borderTop={1} borderColor="gray.200">
-          <Box display="flex" gap={3} alignItems="end">
-            <TextField
-              fullWidth
-              multiline
-              maxRows={6}
-              variant="outlined"
-              placeholder={selectedDocs.length === 0 ? "Select documents first..." : "Ask about your documents..."}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              disabled={loading || selectedDocs.length === 0}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  bgcolor: '#f9fafb',
-                  '& fieldset': { borderColor: '#e5e7eb' },
-                },
-              }}
-            />
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleSend}  
-              disabled={loading || selectedDocs.length === 0 || !question.trim()}
-              sx={{
-                px: 6,
-                py: 3,
-                borderRadius: 3,
-                bgcolor: '#6366f1',
-                '&:hover': { bgcolor: '#4f46e5' },
-                textTransform: 'none',
-                fontSize: '1.1rem',
-              }}
-            >
-              {loading ? <CircularProgress size={24} color="inherit" /> : <Send />}
-            </Button>
-          </Box>
-        </Box>
+        <ChatHeader user={user} companyId={companyId} />
+        <MessageList messages={messages} />
+        <div ref={messagesEndRef} />
+        <ChatInput
+          question={question}
+          setQuestion={setQuestion}
+          onSend={handleSend}
+          loading={loading}
+          disabled={selectedDocs.length === 0}
+        />
       </Box>
     </Box>
   );

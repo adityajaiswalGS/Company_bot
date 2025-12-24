@@ -1,5 +1,5 @@
-// src/app/login/page.js
 'use client';
+// src/app/login/page.js
 
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -71,7 +71,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100">
       <div className="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md">
-        <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">Admin Login</h1>
+        <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Multi-Company Chat RAG</h1>
 
         {error && (
           <p className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg text-center">{error}</p>
